@@ -13,5 +13,6 @@
     <param name="self_diagnose" value="false"/>
   </node>
 
-  <node pkg="sphero_node" type="sphero.py" name="sphero_node" output="screen"/>
+  <rosparam command="load" file="$(find bb8_bringup)/launch/param/bt_addr.yaml" />
+  <node pkg="bb8_node" type="bb8.py" name="bb8_node" output="screen"/>
 </launch>
