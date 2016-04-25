@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<launch>
+    <include file="$(find bb8_bringup)/launch/bb8_bt_addr.launch"/>
+    <include file="$(find sphero_dashboard)/launch/sphero_dashboard.launch"/>
+    <include file="$(find colorblob_tracker)/launch/launch_470_color_blob_tracker.launch"/>
+    <include file="$(find apriltags_intrude_detector)/launch/launch_apriltags_intrude_detector.launch"/>
+</launch>
