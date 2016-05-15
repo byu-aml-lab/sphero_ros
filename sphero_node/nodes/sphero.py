@@ -248,9 +248,13 @@ class SpheroNode(object):
     def cmd_vel(self, msg):
         if self.is_connected:
             self.last_cmd_vel_time = rospy.Time.now()
-            self.cmd_heading = self.normalize_angle_positive(math.atan2(msg.linear.x,msg.linear.y))*180/math.pi
             self.cmd_speed = math.sqrt(math.pow(msg.linear.x,2)+math.pow(msg.linear.y,2))
-            self.robot.roll(int(self.cmd_speed), int(self.cmd_heading), 1, False)
+            shouldRoll = 1
+            if self.cmd_speed == 0:
+                shouldRoll = 0
+            else:
+                self.cmd_heading = self.normalize_angle_positive(math.atan2(msg.linear.x,msg.linear.y))*180/math.pi
+            self.robot.roll(int(self.cmd_speed), int(self.cmd_heading), shouldRoll, False)
 
     def cmd_turn(self, msg):
         if self.is_connected:
