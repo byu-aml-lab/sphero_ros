@@ -129,12 +129,17 @@ class SpheroNode(object):
         return math.fmod(math.fmod(angle, 2.0*math.pi) + 2.0*math.pi, 2.0*math.pi);
 
     def start(self):
-        try:
-            self.is_connected = self.robot.connect()
-            rospy.loginfo("Connect to Sphero with address: %s" % self.robot.bt.target_address)
-        except:
-            rospy.logerr("Failed to connect to Sphero.")
-            sys.exit(1)
+        tries = 5
+        while tries > 0:
+            try:
+                self.is_connected = self.robot.connect()
+                rospy.loginfo("Connect to Sphero with address: %s" % self.robot.bt.target_address)
+                break;
+            except:
+                rospy.logerr("Failed to connect to Sphero.")
+                tries -= 1
+                if tries <= 0:
+                    sys.exit(1)
         #setup streaming    
         self.robot.set_filtered_data_strm(self.sampling_divisor, 1 , 0, True)
         self.robot.add_async_callback(sphero_driver.IDCODE['DATA_STRM'], self.parse_data_strm)
