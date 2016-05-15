@@ -104,10 +104,10 @@ class SpheroNode(object):
         self.power_state = 0
 
     def _init_pubsub(self):
-        self.odom_pub = rospy.Publisher('odom', Odometry)
-        self.imu_pub = rospy.Publisher('imu', Imu)
-        self.collision_pub = rospy.Publisher('collision', SpheroCollision)
-        self.diag_pub = rospy.Publisher('/diagnostics', DiagnosticArray)
+        self.odom_pub = rospy.Publisher('odom', Odometry, queue_size = 1)
+        self.imu_pub = rospy.Publisher('imu', Imu, queue_size = 1)
+        self.collision_pub = rospy.Publisher('collision', SpheroCollision, queue_size = 1)
+        self.diag_pub = rospy.Publisher('/diagnostics', DiagnosticArray, queue_size = 1)
         self.cmd_vel_sub = rospy.Subscriber('cmd_vel', Twist, self.cmd_vel, queue_size = 1)
         self.cmd_turn_sub = rospy.Subscriber('cmd_turn', Float32, self.cmd_turn, queue_size = 1)
         self.color_sub = rospy.Subscriber('set_color', ColorRGBA, self.set_color, queue_size = 1)
