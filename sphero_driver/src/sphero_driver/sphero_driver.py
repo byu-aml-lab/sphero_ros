@@ -712,7 +712,7 @@ class Sphero(threading.Thread):
     brake, 0x04 - ignored.
     :param power: 0-255 scalar value (units?).
     """
-    self.send(self.pack_cmd(REQ['CMD_RAW_MOTORS'], [l_mode, l_power, r_mode, r_power]), response)
+    self.send(self.pack_cmd(REQ['CMD_SET_RAW_MOTORS'], [l_mode & 0xff, l_power & 0xff, r_mode & 0xff, r_power & 0xff]), response)
 
   def send(self, data, response):
     """
