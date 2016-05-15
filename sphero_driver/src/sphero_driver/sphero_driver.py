@@ -56,6 +56,9 @@ MRSP = dict(
   ORBOTIX_RSP_CODE_MA_CORRUPT = 0x34,   #Main application corrupt
   ORBOTIX_RSP_CODE_MSG_TIMEOUT = 0x35)  #Msg state machine timed out
 
+#Length for synchronous reponses
+RESCODE = dict(
+  PWR_STATE = 9)
 
 #ID codes for asynchronous packets
 IDCODE = dict(
@@ -816,6 +819,9 @@ class Sphero(threading.Thread):
             break
             #print "Response packet", self.data2hexstr(data_packet)
          
+          if data_length==RESCODE['PWR_STATE'] and self._sync_callback_dict.has_key(RESCODE['PWR_STATE']):
+            self._sync_callback_dict[RESCODE['PWR_STATE']](self.parse_pwr_status(data_packet, data_length))
+
         elif data[:2] == RECV['ASYNC']:
           data_length = (ord(data[3])<<8)+ord(data[4])
           if data_length+5 <= len(data):
@@ -852,6 +858,11 @@ class Sphero(threading.Thread):
       * 04h = Battery Critical
     '''
     return struct.unpack_from('B', ''.join(data[5:]))[0]
+
+  def parse_pwr_status(self, data, data_length):
+    output = {}
+    output['PowerState'], output['BattVoltage'], output['NumCharges'], output['TimeSinceChg'] = struct.unpack_from('>xBHHH', ''.join(data[5:]))
+    return output
 
   def parse_collision_detect(self, data, data_length):
     '''

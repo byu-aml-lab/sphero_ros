@@ -102,6 +102,9 @@ class SpheroNode(object):
         self.cmd_speed = 0
         self.power_state_msg = "No Battery Info"
         self.power_state = 0
+        self.batt_voltage = 0
+        self.num_charges = 0
+        self.time_since_chg = 0
 
     def _init_pubsub(self):
         self.odom_pub = rospy.Publisher('odom', Odometry, queue_size = 1)
@@ -152,6 +155,8 @@ class SpheroNode(object):
         self.robot.add_async_callback(sphero_driver.IDCODE['COLLISION'], self.parse_collision)
         #set the ball to connection color
         self.robot.set_rgb_led(self.connect_color_red,self.connect_color_green,self.connect_color_blue,0,False)
+        #set the sphero to receive power status
+        self.robot.add_sync_callback(sphero_driver.RESCODE['PWR_STATE'], self.parse_power_state)
         #now start receiving packets
         self.robot.start()
 
@@ -166,6 +171,7 @@ class SpheroNode(object):
                     self.robot.roll(int(self.cmd_speed), int(self.cmd_heading), 1, False)
             if (now - self.last_diagnostics_time) > self.diag_update_rate:
                 self.last_diagnostics_time = now
+                self.robot.get_power_state(True)
                 self.publish_diagnostics(now)
             r.sleep()
                     
@@ -188,6 +194,15 @@ class SpheroNode(object):
             stat.level=DiagnosticStatus.ERROR
         diag.status.append(stat)
 
+        stat = DiagnosticStatus(name="Battery Voltage", level=DiagnosticStatus.OK, message=str(self.batt_voltage))
+        diag.status.append(stat)
+
+        stat = DiagnosticStatus(name="Number Of Charges", level=DiagnosticStatus.OK, message=str(self.num_charges))
+        diag.status.append(stat)
+
+        stat = DiagnosticStatus(name="Time Since Charge", level=DiagnosticStatus.OK, message=str(self.time_since_chg))
+        diag.status.append(stat)
+
         self.diag_pub.publish(diag)
 
 
@@ -208,6 +223,14 @@ class SpheroNode(object):
             self.collision = collision
             self.collision_pub.publish(self.collision)
             
+
+    def parse_power_state(self, data):
+        if self.is_connected:
+            self.power_state = data['PowerState']
+            self.power_state_msg = self.battery_state[self.power_state]
+            self.batt_voltage = data['BattVoltage']
+            self.num_charges = data['NumCharges']
+            self.time_since_chg = data['TimeSinceChg']
 
     def parse_power_notify(self, data):
         if self.is_connected:
