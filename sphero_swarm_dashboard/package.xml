@@ -1,13 +1,13 @@
 <package>
-  <name>sphero_dashboard</name>
-  <version>0.1.0</version>
+  <name>sphero_swarm_dashboard</name>
+  <version>0.0.5</version>
   <description>
-    sphero_dashboard provides a GUI for displaying Sphero information.
+    sphero_swarm_dashboard provides a GUI for displaying Sphero information.
   </description>
   <author>Daqing Yi</author>
   <maintainer email="daqing.yi@byu.edu">Daqing Yi</maintainer>
   <license>BSD</license>
-  <url>http://ros.org/wiki/sphero_dashboard</url>
+  <url>http://ros.org/wiki/sphero_swarm_dashboard</url>
   
   <buildtool_depend>catkin</buildtool_depend>
 
