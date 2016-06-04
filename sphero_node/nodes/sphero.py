@@ -105,6 +105,7 @@ class SpheroNode(object):
         self.batt_voltage = 0
         self.num_charges = 0
         self.time_since_chg = 0
+        self.perm_flags = 0;
 
     def _init_pubsub(self):
         self.odom_pub = rospy.Publisher('odom', Odometry, queue_size = 1)
@@ -157,6 +158,8 @@ class SpheroNode(object):
         self.robot.set_rgb_led(self.connect_color_red,self.connect_color_green,self.connect_color_blue,0,False)
         #set the sphero to receive power status
         self.robot.add_sync_callback(sphero_driver.RESCODE['PWR_STATE'], self.parse_power_state)
+        #set the sphero to receive permanent flags
+        self.robot.add_sync_callback(sphero_driver.RESCODE['PERM_FLAGS'], self.parse_perm_flags)
         #now start receiving packets
         self.robot.start()
 
@@ -228,6 +231,11 @@ class SpheroNode(object):
             self.batt_voltage = data['BattVoltage']
             self.num_charges = data['NumCharges']
             self.time_since_chg = data['TimeSinceChg']
+
+    def parse_perm_flags(self, data):
+        if self.is_connected:
+            self.perm_flags = data;
+            rospy.loginfo("Permanent flags: " + str(bin(self.perm_flags)))
 
     def parse_power_notify(self, data):
         if self.is_connected:

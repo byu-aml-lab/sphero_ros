@@ -58,6 +58,7 @@ MRSP = dict(
 
 #Length for synchronous reponses
 RESCODE = dict(
+  PERM_FLAGS = 5,
   PWR_STATE = 9)
 
 #ID codes for asynchronous packets
@@ -107,6 +108,8 @@ REQ = dict(
   CMD_BOOST = [0x02, 0x31],
   CMD_SET_RAW_MOTORS = [0x02, 0x33],
   CMD_SET_MOTION_TO = [0x02, 0x34],
+  CMD_SET_PERM_FLAGS = [0x02, 0x35],
+  CMD_GET_PERM_FLAGS = [0x02, 0x36],
   CMD_GET_CONFIG_BLK = [0x02, 0x40],
   CMD_SET_DEVICE_MODE = [0x02, 0x42],
   CMD_SET_CFG_BLOCK = [0x02, 0x43],
@@ -717,6 +720,12 @@ class Sphero(threading.Thread):
     """
     self.send(self.pack_cmd(REQ['CMD_SET_RAW_MOTORS'], [l_mode & 0xff, l_power & 0xff, r_mode & 0xff, r_power & 0xff]), response)
 
+  def get_permanent_option_flags(self, response):
+    self.send(self.pack_cmd(REQ['CMD_GET_PERM_FLAGS'],[]), response)
+
+  def set_permanent_option_flags(self, flags, response):
+    self.send(self.pack_cmd(REQ['CMD_SET_PERM_FLAGS'], [((flags>>24) & 0xff), ((flags>>16) & 0xff), ((flags>>8) & 0xff) ,(flags & 0xff)]), response)
+
   def send(self, data, response):
     """
     Packets are sent from Client -> Sphero in the following byte format::
@@ -821,6 +830,8 @@ class Sphero(threading.Thread):
          
           if data_length==RESCODE['PWR_STATE'] and self._sync_callback_dict.has_key(RESCODE['PWR_STATE']):
             self._sync_callback_dict[RESCODE['PWR_STATE']](self.parse_pwr_status(data_packet, data_length))
+          elif data_length==RESCODE['PERM_FLAGS'] and self._sync_callback_dict.has_key(RESCODE['PERM_FLAGS']):
+            self._sync_callback_dict[RESCODE['PERM_FLAGS']](self.parse_perm_flags(data_packet, data_length))
 
         elif data[:2] == RECV['ASYNC']:
           data_length = (ord(data[3])<<8)+ord(data[4])
@@ -863,6 +874,9 @@ class Sphero(threading.Thread):
     output = {}
     output['PowerState'], output['BattVoltage'], output['NumCharges'], output['TimeSinceChg'] = struct.unpack_from('>xBHHH', ''.join(data[5:]))
     return output
+
+  def parse_perm_flags(self, data, data_length):
+    return struct.unpack_from('>I', ''.join(data[5:]))[0]
 
   def parse_collision_detect(self, data, data_length):
     '''
