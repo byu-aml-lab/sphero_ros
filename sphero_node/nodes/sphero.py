@@ -186,21 +186,18 @@ class SpheroNode(object):
     def publish_diagnostics(self, time):
         diag = DiagnosticArray()
         diag.header.stamp = time
+
+        values = []
+        values.append(KeyValue(key="voltage", value=str(self.batt_voltage)))
+        values.append(KeyValue(key="numCharges", value=str(self.num_charges)))
+        values.append(KeyValue(key="timeSinceCharge", value=str(self.time_since_chg)))
         
-        stat = DiagnosticStatus(name="Battery Status", level=DiagnosticStatus.OK, message=self.power_state_msg)
+        stat = DiagnosticStatus(name="Battery Status", level=DiagnosticStatus.OK, message=self.power_state_msg, values=values)
         if self.power_state == 3:
             stat.level=DiagnosticStatus.WARN
         if self.power_state == 4:
             stat.level=DiagnosticStatus.ERROR
-        diag.status.append(stat)
 
-        stat = DiagnosticStatus(name="Battery Voltage", level=DiagnosticStatus.OK, message=str(self.batt_voltage))
-        diag.status.append(stat)
-
-        stat = DiagnosticStatus(name="Number Of Charges", level=DiagnosticStatus.OK, message=str(self.num_charges))
-        diag.status.append(stat)
-
-        stat = DiagnosticStatus(name="Time Since Charge", level=DiagnosticStatus.OK, message=str(self.time_since_chg))
         diag.status.append(stat)
 
         self.diag_pub.publish(diag)
