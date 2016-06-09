@@ -264,7 +264,7 @@ class SpheroNode(object):
             odom = Odometry(header=rospy.Header(frame_id="odom"), child_frame_id='base_footprint')
             odom.header.stamp = now
             odom.pose.pose = Pose(Point(data["ODOM_X"]/100.0,data["ODOM_Y"]/100.0,0.0), Quaternion(0.0,0.0,0.0,1.0))
-            odom.twist.twist = Twist(Vector3(data["VELOCITY_X"]/1000.0, 0, 0), Vector3(0, 0, data["GYRO_Z_FILTERED"]*10.0*math.pi/180.0))
+            odom.twist.twist = Twist(Vector3(data["VELOCITY_X"]/1000.0, data["VELOCITY_Y"]/1000.0, 0), Vector3(0, 0, data["GYRO_Z_FILTERED"]*10.0*math.pi/180.0))
             odom.pose.covariance =self.ODOM_POSE_COVARIANCE                
             odom.twist.covariance =self.ODOM_TWIST_COVARIANCE
             self.odom_pub.publish(odom)                      
