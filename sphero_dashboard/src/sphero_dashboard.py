@@ -175,7 +175,7 @@ class DashboardWidget(QtGui.QWidget):
 
     def rightRotate(self):
         deg = int(self.degTextbox.displayText())
-        self.parentWindow.setHeading(15)
+        self.parentWindow.setHeading(deg)
 
     def headingChange(self, int):
         delta_val = self.headingSlider.value() - self.currentHeadingSliderValue 
