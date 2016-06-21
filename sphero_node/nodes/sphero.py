@@ -102,13 +102,18 @@ class SpheroNode(object):
         self.cmd_speed = 0
         self.power_state_msg = "No Battery Info"
         self.power_state = 0
+        self.batt_voltage = 0
+        self.num_charges = 0
+        self.time_since_chg = 0
+        self.perm_flags = 0;
 
     def _init_pubsub(self):
-        self.odom_pub = rospy.Publisher('odom', Odometry)
-        self.imu_pub = rospy.Publisher('imu', Imu)
-        self.collision_pub = rospy.Publisher('collision', SpheroCollision)
-        self.diag_pub = rospy.Publisher('/diagnostics', DiagnosticArray)
+        self.odom_pub = rospy.Publisher('odom', Odometry, queue_size = 1)
+        self.imu_pub = rospy.Publisher('imu', Imu, queue_size = 1)
+        self.collision_pub = rospy.Publisher('collision', SpheroCollision, queue_size = 1)
+        self.diag_pub = rospy.Publisher('/diagnostics', DiagnosticArray, queue_size = 1)
         self.cmd_vel_sub = rospy.Subscriber('cmd_vel', Twist, self.cmd_vel, queue_size = 1)
+        self.cmd_boost_sub = rospy.Subscriber('cmd_boost', Twist, self.cmd_boost, queue_size = 1)
         self.cmd_turn_sub = rospy.Subscriber('cmd_turn', Float32, self.cmd_turn, queue_size = 1)
         self.color_sub = rospy.Subscriber('set_color', ColorRGBA, self.set_color, queue_size = 1)
         self.back_led_sub = rospy.Subscriber('set_back_led', Float32, self.set_back_led, queue_size = 1)
@@ -129,12 +134,17 @@ class SpheroNode(object):
         return math.fmod(math.fmod(angle, 2.0*math.pi) + 2.0*math.pi, 2.0*math.pi);
 
     def start(self):
-        try:
-            self.is_connected = self.robot.connect()
-            rospy.loginfo("Connect to Sphero with address: %s" % self.robot.bt.target_address)
-        except:
-            rospy.logerr("Failed to connect to Sphero.")
-            sys.exit(1)
+        tries = 5
+        while tries > 0:
+            try:
+                self.is_connected = self.robot.connect()
+                rospy.loginfo("Connect to Sphero with address: %s" % self.robot.bt.target_address)
+                break;
+            except:
+                rospy.logerr("Failed to connect to Sphero.")
+                tries -= 1
+                if tries <= 0:
+                    sys.exit(1)
         #setup streaming    
         self.robot.set_filtered_data_strm(self.sampling_divisor, 1 , 0, True)
         self.robot.add_async_callback(sphero_driver.IDCODE['DATA_STRM'], self.parse_data_strm)
@@ -146,6 +156,10 @@ class SpheroNode(object):
         self.robot.add_async_callback(sphero_driver.IDCODE['COLLISION'], self.parse_collision)
         #set the ball to connection color
         self.robot.set_rgb_led(self.connect_color_red,self.connect_color_green,self.connect_color_blue,0,False)
+        #set the sphero to receive power status
+        self.robot.add_sync_callback(sphero_driver.RESCODE['PWR_STATE'], self.parse_power_state)
+        #set the sphero to receive permanent flags
+        self.robot.add_sync_callback(sphero_driver.RESCODE['PERM_FLAGS'], self.parse_perm_flags)
         #now start receiving packets
         self.robot.start()
 
@@ -160,6 +174,7 @@ class SpheroNode(object):
                     self.robot.roll(int(self.cmd_speed), int(self.cmd_heading), 1, False)
             if (now - self.last_diagnostics_time) > self.diag_update_rate:
                 self.last_diagnostics_time = now
+                self.robot.get_power_state(True)
                 self.publish_diagnostics(now)
             r.sleep()
                     
@@ -174,12 +189,18 @@ class SpheroNode(object):
     def publish_diagnostics(self, time):
         diag = DiagnosticArray()
         diag.header.stamp = time
+
+        values = []
+        values.append(KeyValue(key="voltage", value=str(self.batt_voltage)))
+        values.append(KeyValue(key="numCharges", value=str(self.num_charges)))
+        values.append(KeyValue(key="timeSinceCharge", value=str(self.time_since_chg)))
         
-        stat = DiagnosticStatus(name="Battery Status", level=DiagnosticStatus.OK, message=self.power_state_msg)
+        stat = DiagnosticStatus(name="Battery Status", level=DiagnosticStatus.OK, message=self.power_state_msg, values=values)
         if self.power_state == 3:
             stat.level=DiagnosticStatus.WARN
         if self.power_state == 4:
             stat.level=DiagnosticStatus.ERROR
+
         diag.status.append(stat)
 
         self.diag_pub.publish(diag)
@@ -202,6 +223,19 @@ class SpheroNode(object):
             self.collision = collision
             self.collision_pub.publish(self.collision)
             
+
+    def parse_power_state(self, data):
+        if self.is_connected:
+            self.power_state = data['PowerState']
+            self.power_state_msg = self.battery_state[self.power_state]
+            self.batt_voltage = data['BattVoltage']
+            self.num_charges = data['NumCharges']
+            self.time_since_chg = data['TimeSinceChg']
+
+    def parse_perm_flags(self, data):
+        if self.is_connected:
+            self.perm_flags = data;
+            rospy.loginfo("Permanent flags: " + str(bin(self.perm_flags)))
 
     def parse_power_notify(self, data):
         if self.is_connected:
@@ -230,7 +264,7 @@ class SpheroNode(object):
             odom = Odometry(header=rospy.Header(frame_id="odom"), child_frame_id='base_footprint')
             odom.header.stamp = now
             odom.pose.pose = Pose(Point(data["ODOM_X"]/100.0,data["ODOM_Y"]/100.0,0.0), Quaternion(0.0,0.0,0.0,1.0))
-            odom.twist.twist = Twist(Vector3(data["VELOCITY_X"]/1000.0, 0, 0), Vector3(0, 0, data["GYRO_Z_FILTERED"]*10.0*math.pi/180.0))
+            odom.twist.twist = Twist(Vector3(data["VELOCITY_X"]/1000.0, data["VELOCITY_Y"]/1000.0, 0), Vector3(0, 0, data["GYRO_Z_FILTERED"]*10.0*math.pi/180.0))
             odom.pose.covariance =self.ODOM_POSE_COVARIANCE                
             odom.twist.covariance =self.ODOM_TWIST_COVARIANCE
             self.odom_pub.publish(odom)                      
@@ -243,9 +277,19 @@ class SpheroNode(object):
     def cmd_vel(self, msg):
         if self.is_connected:
             self.last_cmd_vel_time = rospy.Time.now()
-            self.cmd_heading = self.normalize_angle_positive(math.atan2(msg.linear.x,msg.linear.y))*180/math.pi
             self.cmd_speed = math.sqrt(math.pow(msg.linear.x,2)+math.pow(msg.linear.y,2))
-            self.robot.roll(int(self.cmd_speed), int(self.cmd_heading), 1, False)
+            shouldRoll = 1
+            if self.cmd_speed == 0:
+                shouldRoll = 0
+            else:
+                self.cmd_heading = self.normalize_angle_positive(math.atan2(msg.linear.x,msg.linear.y))*180/math.pi
+            self.robot.roll(int(self.cmd_speed), int(self.cmd_heading), shouldRoll, False)
+
+    def cmd_boost(self, msg):
+        if self.is_connected:
+            #self.robot.boost(0, int(self.cmd_heading), False)
+            self.robot.set_raw_motor_values(int(msg.angular.x), int(msg.linear.x),
+                                            int(msg.angular.y), int(msg.linear.y), False)
 
     def cmd_turn(self, msg):
         if self.is_connected:

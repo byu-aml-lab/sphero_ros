@@ -56,6 +56,10 @@ MRSP = dict(
     ORBOTIX_RSP_CODE_MA_CORRUPT = 0x34,   #Main application corrupt
     ORBOTIX_RSP_CODE_MSG_TIMEOUT = 0x35)  #Msg state machine timed out
 
+#Length for synchronous reponses
+RESCODE = dict(
+  PERM_FLAGS = 5,
+  PWR_STATE = 9)
 
 #ID codes for asynchronous packets
 IDCODE = dict(
@@ -104,6 +108,8 @@ REQ = dict(
     CMD_BOOST = [0x02, 0x31],
     CMD_SET_RAW_MOTORS = [0x02, 0x33],
     CMD_SET_MOTION_TO = [0x02, 0x34],
+    CMD_SET_PERM_FLAGS = [0x02, 0x35],
+    CMD_GET_PERM_FLAGS = [0x02, 0x36],
     CMD_GET_CONFIG_BLK = [0x02, 0x40],
     CMD_SET_DEVICE_MODE = [0x02, 0x42],
     CMD_SET_CFG_BLOCK = [0x02, 0x43],
@@ -632,7 +638,7 @@ class Sphero(threading.Thread):
         disables collision detection for a period of time after the async
         message is generated, preventing message overload to the
         client. The value is in 10 millisecond increments.
-
+    
         :param method: Detection method type to use. Currently the only\
         method supported is 01h. Use 00h to completely disable this\
         service.
@@ -646,7 +652,7 @@ class Sphero(threading.Thread):
         retriggering; specified in 10ms increments.
         """
         self.send(self.pack_cmd(REQ['CMD_CFG_COL_DET'],[method, Xt, Xspd, Yt, Yspd, ignore_time]), response)
-
+  
     def set_rgb_led(self, red, green, blue, save, response):
         """
         This allows you to set the RGB LED color. The composite value is
@@ -655,33 +661,33 @@ class Sphero(threading.Thread):
         FLAG is true, the value is also saved as the "user LED color"
         which persists across power cycles and is rendered in the gap
         between an application connecting and sending this command.
-
+    
         :param red: red color value.
         :param green: green color value.
         :param blue: blue color value.
         :param save: 01h for save (color is saved as "user LED color").
         """
         self.send(self.pack_cmd(REQ['CMD_SET_RGB_LED'],[self.clamp(red,0,255), self.clamp(green,0,255), self.clamp(blue,0,255), save]), response)
-
+ 
     def set_back_led(self, brightness, response):
         """
         This allows you to control the brightness of the back LED. The
         value does not persist across power cycles.
-
+    
         :param brightness: 0-255, off-on (the blue LED on hemisphere of the Sphero).
         :param response: request response back from Sphero.
         """
         self.send(self.pack_cmd(REQ['CMD_SET_BACK_LED'],[self.clamp(brightness,0,255)]), response)
-
+ 
     def get_rgb_led(self, response):
         """
         This retrieves the "user LED color" which is stored in the config
         block (which may or may not be actively driven to the RGB LED).
-
+    
         :param response: request response back from Sphero.
         """
         self.send(self.pack_cmd(REQ['CMD_GET_RGB_LED'],[]), response)
-
+ 
     def roll(self, speed, heading, state, response):
         """
         This commands Sphero to roll along the provided vector. Both a
@@ -691,7 +697,7 @@ class Sphero(threading.Thread):
         degrees on a circle, relative to the ball: 0 is straight ahead, 90
         is to the right, 180 is back and 270 is to the left. The valid
         range is 0..359.
-
+    
         :param speed: 0-255 value representing 0-max speed of the sphero.
         :param heading: heading in degrees from 0 to 359.
         :param state: 00h for off (braking) and 01h for on (driving).
@@ -706,7 +712,7 @@ class Sphero(threading.Thread):
         time. The Time parameter is the duration in tenths of a
         second. Setting it to zero enables constant boost until a Set
         Stabilization command is received.
-
+    
         :param time: duration of boost in tenths of seconds.
         :param heading: the heading to travel while boosting.
         :param response: request response back from Sphero.
@@ -721,21 +727,27 @@ class Sphero(threading.Thread):
         a power value from 0- 255. This command will disable stabilization
         if both modes aren't "ignore" so you'll need to re-enable it via
         CID 02h once you're done.
-
+    
         :param mode: 0x00 - off, 0x01 - forward, 0x02 - reverse, 0x03 -\
         brake, 0x04 - ignored.
         :param power: 0-255 scalar value (units?).
         """
-        self.send(self.pack_cmd(REQ['CMD_RAW_MOTORS'], [l_mode, l_power, r_mode, r_power]), response)
+        self.send(self.pack_cmd(REQ['CMD_SET_RAW_MOTORS'], [l_mode & 0xff, l_power & 0xff, r_mode & 0xff, r_power & 0xff]), response)
+
+    def get_permanent_option_flags(self, response):
+        self.send(self.pack_cmd(REQ['CMD_GET_PERM_FLAGS'],[]), response)
+
+    def set_permanent_option_flags(self, flags, response):
+        self.send(self.pack_cmd(REQ['CMD_SET_PERM_FLAGS'], [((flags>>24) & 0xff), ((flags>>16) & 0xff), ((flags>>8) & 0xff) ,(flags & 0xff)]), response)
 
     def send(self, data, response):
         """
         Packets are sent from Client -> Sphero in the following byte format::
-
+    
           -------------------------------------------------------
           | SOP1 | SOP2 | DID | CID | SEQ | DLEN | <data> | CHK |
           -------------------------------------------------------
-
+    
         * SOP1 - start packet 1 - Always 0xff. 
         * SOP2 - start packet 2 - Set to 0xff when an acknowledgement is\
           expected, 0xfe otherwise.    
@@ -773,11 +785,11 @@ class Sphero(threading.Thread):
         '''
         Commands are acknowledged from the Sphero -> Client in the
         following format::
-
+    
           -------------------------------------------------
           |SOP1 | SOP2 | MSRP | SEQ | DLEN | <data> | CHK |
           -------------------------------------------------
-
+    
         * SOP1 - Start Packet 1 - Always 0xff.
         * SOP2 - Start Packet 2 - Set to 0xff when this is an\
           acknowledgement, 0xfe otherwise.
@@ -791,17 +803,17 @@ class Sphero(threading.Thread):
         * CHK - Checksum - - The modulo 256 sum of all the bytes from the\
           DID through the end of the data payload, bit inverted (1's\
           complement)
-
+    
         Asynchronous Packets are sent from Sphero -> Client in the
         following byte format::
-
+    
           -------------------------------------------------------------
           |SOP1 | SOP2 | ID CODE | DLEN-MSB | DLEN-LSB | <data> | CHK |
           -------------------------------------------------------------
-
+    
         * SOP1 - Start Packet 1 - Always 0xff.
         * SOP2 - Start Packet 2 - Set to 0xff when this is an
-         acknowledgement, 0xfe otherwise.
+          acknowledgement, 0xfe otherwise.
         * ID CODE - ID Code - See the IDCODE dict
         * DLEN-MSB - Data Length MSB - The MSB number of bytes following\
           through the end of the packet
@@ -811,9 +823,9 @@ class Sphero(threading.Thread):
         * CHK - Checksum - - The modulo 256 sum of all the bytes from the\
           DID through the end of the data payload, bit inverted (1's\
           complement)
-
+    
         '''
-
+    
         while self.is_connected and not self.shutdown:
             with self._communication_lock:
                 self.raw_data_buf += self.bt.recv(num_bytes)
@@ -829,7 +841,12 @@ class Sphero(threading.Thread):
                     else:
                         break
                         #print "Response packet", self.data2hexstr(data_packet)
-         
+                   
+                    if data_length==RESCODE['PWR_STATE'] and self._sync_callback_dict.has_key(RESCODE['PWR_STATE']):
+                        self._sync_callback_dict[RESCODE['PWR_STATE']](self.parse_pwr_status(data_packet, data_length))
+                    elif data_length==RESCODE['PERM_FLAGS'] and self._sync_callback_dict.has_key(RESCODE['PERM_FLAGS']):
+                        self._sync_callback_dict[RESCODE['PERM_FLAGS']](self.parse_perm_flags(data_packet, data_length))
+    
                 elif data[:2] == RECV['ASYNC']:
                     data_length = (ord(data[3])<<8)+ord(data[4])
                     if data_length+5 <= len(data):
@@ -845,7 +862,7 @@ class Sphero(threading.Thread):
                     elif data_packet[2]==IDCODE['PWR_NOTIFY'] and self._async_callback_dict.has_key(IDCODE['PWR_NOTIFY']):
                         self._async_callback_dict[IDCODE['PWR_NOTIFY']](self.parse_pwr_notify(data_packet, data_length))
                     #else:
-                    #  print "got a packet that isn't streaming: " + self.data2hexstr(data)
+                    #    print "got a packet that isn't streaming: " + self.data2hexstr(data)
                 else:
                     raise RuntimeError("Bad SOF : " + self.data2hexstr(data))
             self.raw_data_buf=data
@@ -854,11 +871,11 @@ class Sphero(threading.Thread):
         '''
         The data payload of the async message is 1h bytes long and
         formatted as follows::
-
+    
           --------
           |State |
           --------
-
+    
         The power state byte: 
           * 01h = Battery Charging, 
           * 02h = Battery OK,
@@ -867,15 +884,23 @@ class Sphero(threading.Thread):
         '''
         return struct.unpack_from('B', ''.join(data[5:]))[0]
 
+    def parse_pwr_status(self, data, data_length):
+        output = {}
+        output['PowerState'], output['BattVoltage'], output['NumCharges'], output['TimeSinceChg'] = struct.unpack_from('>xBHHH', ''.join(data[5:]))
+        return output
+
+    def parse_perm_flags(self, data, data_length):
+        return struct.unpack_from('>I', ''.join(data[5:]))[0]
+
     def parse_collision_detect(self, data, data_length):
         '''
         The data payload of the async message is 10h bytes long and
         formatted as follows::
-
+    
           -----------------------------------------------------------------
           |X | Y | Z | AXIS | xMagnitude | yMagnitude | Speed | Timestamp |
           -----------------------------------------------------------------
-
+    
         * X, Y, Z - Impact components normalized as a signed 16-bit\
         value. Use these to determine the direction of collision event. If\
         you don't require this level of fidelity, the two Magnitude fields\
@@ -893,10 +918,10 @@ class Sphero(threading.Thread):
         this value.
         '''
         output={}
-     
+        
         output['X'], output['Y'], output['Z'], output['Axis'], output['xMagnitude'], output['yMagnitude'], output['Speed'], output['Timestamp'] = struct.unpack_from('>hhhbhhbI', ''.join(data[5:]))
         return output
-
+  
     def parse_data_strm(self, data, data_length):
         output={}
         for i in range((data_length-1)/2):
@@ -906,10 +931,7 @@ class Sphero(threading.Thread):
         #print output
         return output
 
-
-
     def disconnect(self):
         self.is_connected = False
         self.bt.close()
         return self.is_connected
-
